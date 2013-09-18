@@ -332,7 +332,8 @@ void ofxThreadedVideo::threadedFunction(){
                 if(c.getCommand() == "setPaused"){
                     if(bVerbose) ofLogVerbose() << instanceID << " = " << c.getCommandAsString();
                     lock();
-                    bIsPaused = c.getArgument<bool>(0);
+                    //bIsPaused = c.getArgument<bool>(0);// LS: causes variable not initialized break in VS 2012
+					bIsPaused = c.getArgument(0, false);
                     unlock();
                     video[videoID].setPaused(bIsPaused);
                     bPopCommand = true;
@@ -385,9 +386,9 @@ void ofxThreadedVideo::threadedFunction(){
                     }else{
                         frameEnd -= 1;
                         
-                        assert(frameStart >= 0);
-                        assert(frameEnd >= frameStart);
-                        assert(frameEnd <= frameTotal);
+                        //assert(frameStart >= 0);
+                        //assert(frameEnd >= frameStart);
+                        //assert(frameEnd <= frameTotal);
                         
                         fades.push_back(ofxThreadedVideoFade(frameStart, frameEnd, fadeTarget, fadeSound, fadeVideo, fadeOnce));
                     }
@@ -559,6 +560,7 @@ bool ofxThreadedVideo::loadMovie(string path){
     ofxThreadedVideoCommand c("loadMovie", instanceID);
     c.setArgument(path);
     pushCommand(c);
+	return true;
 }
 
 //--------------------------------------------------------------
@@ -1026,3 +1028,9 @@ string ofxThreadedVideo::getEventTypeAsString(ofxThreadedVideoEventType eventTyp
             break;
     }
 }
+
+ofxThreadedVideoEvent::ofxThreadedVideoEvent(string _path, ofxThreadedVideoEventType _eventType, ofxThreadedVideo * _video)
+    : path(_path), eventType(_eventType), video(_video)
+{
+	eventTypeAsString = _video->getEventTypeAsString(_eventType);
+};

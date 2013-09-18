@@ -29,7 +29,7 @@
  *
  */
 
-#ifndef __H_OFXHREADEDVIDEO
+#ifndef __H_OFXTHREADEDVIDEO
 #define __H_OFXTHREADEDVIDEO
 
 #include <set>
@@ -37,8 +37,8 @@
 
 #include "ofMain.h"
 
-#define USE_QUICKTIME_7
-#define USE_JACK_AUDIO
+//#define USE_QUICKTIME_7
+//#define USE_JACK_AUDIO
 
 enum ofxThreadedVideoEventType{
     VIDEO_EVENT_LOAD_OK = 0,
@@ -53,9 +53,12 @@ struct AudioChannelMap{
 };
 #endif
 
-class ofxThreadedVideoFade;
-class ofxThreadedVideoEvent;
-class ofxThreadedVideoCommand;
+// LvdS: compilation with VS 2012 works better when the declaration of the dependent
+// class ofxThreadedVideo is done after these three. 
+//class ofxThreadedVideoFade;
+//class ofxThreadedVideoEvent;
+//class ofxThreadedVideoCommand;
+class ofxThreadedVideo;
 
 static ofMutex                          ofxThreadedVideoGlobalMutex;
 static bool                             ofxThreadedVideoGlobalCritical = false;
@@ -65,6 +68,168 @@ static int                              ofxThreadedVideoGlobalInstanceID = 0;
 
 static int ofxThreadedVideoLoadOk;
 static int ofxThreadedVideoLoadFail;
+
+
+class ofxThreadedVideoFade {
+    
+public:
+    
+    ofxThreadedVideoFade(){
+        fadeOriginal = -1.0;
+    };
+    ofxThreadedVideoFade(int _frameStart, int _frameEnd, float _fadeTarget, bool _fadeSound, bool _fadeVideo, bool _fadeOnce):
+    frameStart(_frameStart), frameEnd(_frameEnd), fadeTarget(_fadeTarget), fadeSound(_fadeSound), fadeVideo(_fadeVideo), fadeOnce(_fadeOnce){
+        fadeOriginal = -1.0;
+        frameDuration = frameEnd - frameStart;
+    };
+    ~ofxThreadedVideoFade(){};
+    
+    float getFade(float fadeCurrent, int frameCurrent){
+        
+        if(fadeOriginal == -1.0f) fadeOriginal = fadeCurrent;
+        
+        if((frameCurrent - frameStart) <= frameEnd){
+            
+            return fadeOriginal + (fadeTarget - fadeOriginal) * (float)((float)(frameCurrent - frameStart) / (float)frameDuration);
+        }else{
+            fadeOriginal = -1.0f;
+            return fadeTarget;
+        }
+        
+    }
+    
+    bool getIsFading(int frameCurrent){
+        if(frameCurrent >= frameStart && frameCurrent <= frameEnd){
+            return true;
+        }else{
+            fadeOriginal = -1.0f;
+            return false;
+        }
+    }
+    
+    bool getFadeDone(int frameCurrent){
+        if(frameCurrent > frameEnd){
+            return true;
+        }else{
+            return false;
+        }
+    }
+    
+    int frameStart;
+    int frameEnd;
+    float frameDuration;
+    float fadeTarget;
+    float fadeOriginal;
+    bool fadeSound;
+    bool fadeVideo;
+    bool fadeOnce;
+    
+};
+
+class ofxThreadedVideoCommand {
+    
+public:
+    
+    ofxThreadedVideoCommand(){
+        setCommand("NULL_COMMAND", -1);
+    }
+    ofxThreadedVideoCommand(string _command, int _instanceID){
+        setCommand(_command, _instanceID);
+    }
+    ~ofxThreadedVideoCommand(){
+        instanceID = -1;
+        command.clear();
+        args.clear();
+    }
+    
+    void setCommand(string _command, int _instanceID){
+        instanceID = _instanceID;
+        command = _command;
+    }
+    
+    int getInstance(){
+        return instanceID;
+    }
+    
+    string getCommand(){
+        return command;
+    }
+    
+    template<typename T>
+    void setArgument(T arg){
+        args.push_back(ofToString(arg));
+    }
+    
+    template<typename T>
+    T getArgument(int index){
+        if(index > args.size() || index < 0){
+            ofLogError() << "Argument index out of range: " << index << " : " << args.size();
+            return NULL;
+        }
+        T t; // template overload hack
+        return getArgument(index, t);
+    }
+    
+    string getArgument(int index, string t){
+        return args[index];
+    }
+    
+    int getArgument(int index, int t){
+        return ofToInt(args[index]);
+    }
+    
+    float getArgument(int index, float t){
+        return ofToFloat(args[index]);
+    }
+    
+    bool getArgument(int index, bool t){
+        return ofToBool(args[index]);
+    }
+    
+    int getNumArguments(){
+        return args.size();
+    }
+    
+    string getCommandAsString(){
+        ostringstream os;
+        os << command << "(";
+        for(int i = 0; i < args.size(); i++){
+            os << args[i] << string(i < args.size() - 1 ? "," : "");
+        }
+        os << ")";
+        return os.str();
+    }
+    
+private:
+    
+    int instanceID;
+    string command;
+    vector<string> args;
+    
+};
+
+static ofxThreadedVideoCommand ofxThreadedVideoNullCommand;
+
+class ofxThreadedVideoEvent{
+
+public:
+
+    ofxThreadedVideoEvent(string _path, ofxThreadedVideoEventType _eventType, ofxThreadedVideo * _video);
+
+    string path;
+    string eventTypeAsString;
+    ofxThreadedVideoEventType eventType;
+    ofxThreadedVideo * video;
+
+    friend ostream& operator<< (ostream &os, ofxThreadedVideoEvent &e);
+    
+};
+
+inline ostream& operator<<(ostream& os, const ofxThreadedVideoEvent &e){
+    os << e.eventTypeAsString << " " << e.path;
+    return os;
+};
+
 
 class ofxThreadedVideo : public ofThread {
 
@@ -253,165 +418,5 @@ private:
 
 };
 
-class ofxThreadedVideoFade {
-    
-public:
-    
-    ofxThreadedVideoFade(){
-        fadeOriginal = -1.0;
-    };
-    ofxThreadedVideoFade(int _frameStart, int _frameEnd, float _fadeTarget, bool _fadeSound, bool _fadeVideo, bool _fadeOnce):
-    frameStart(_frameStart), frameEnd(_frameEnd), fadeTarget(_fadeTarget), fadeSound(_fadeSound), fadeVideo(_fadeVideo), fadeOnce(_fadeOnce){
-        fadeOriginal = -1.0;
-        frameDuration = frameEnd - frameStart;
-    };
-    ~ofxThreadedVideoFade(){};
-    
-    float getFade(float fadeCurrent, int frameCurrent){
-        
-        if(fadeOriginal == -1.0f) fadeOriginal = fadeCurrent;
-        
-        if((frameCurrent - frameStart) <= frameEnd){
-            
-            return fadeOriginal + (fadeTarget - fadeOriginal) * (float)((float)(frameCurrent - frameStart) / (float)frameDuration);
-        }else{
-            fadeOriginal = -1.0f;
-            return fadeTarget;
-        }
-        
-    }
-    
-    bool getIsFading(int frameCurrent){
-        if(frameCurrent >= frameStart && frameCurrent <= frameEnd){
-            return true;
-        }else{
-            fadeOriginal = -1.0f;
-            return false;
-        }
-    }
-    
-    bool getFadeDone(int frameCurrent){
-        if(frameCurrent > frameEnd){
-            return true;
-        }else{
-            return false;
-        }
-    }
-    
-    int frameStart;
-    int frameEnd;
-    float frameDuration;
-    float fadeTarget;
-    float fadeOriginal;
-    bool fadeSound;
-    bool fadeVideo;
-    bool fadeOnce;
-    
-};
-
-class ofxThreadedVideoCommand {
-    
-public:
-    
-    ofxThreadedVideoCommand(){
-        setCommand("NULL_COMMAND", -1);
-    }
-    ofxThreadedVideoCommand(string _command, int _instanceID){
-        setCommand(_command, _instanceID);
-    }
-    ~ofxThreadedVideoCommand(){
-        instanceID = -1;
-        command.clear();
-        args.clear();
-    }
-    
-    void setCommand(string _command, int _instanceID){
-        instanceID = _instanceID;
-        command = _command;
-    }
-    
-    int getInstance(){
-        return instanceID;
-    }
-    
-    string getCommand(){
-        return command;
-    }
-    
-    template<typename T>
-    void setArgument(T arg){
-        args.push_back(ofToString(arg));
-    }
-    
-    template<typename T>
-    T getArgument(int index){
-        if(index > args.size() || index < 0){
-            ofLogError() << "Argument index out of range: " << index << " : " << args.size();
-            return NULL;
-        }
-        T t; // template overload hack
-        return getArgument(index, t);
-    }
-    
-    string getArgument(int index, string t){
-        return args[index];
-    }
-    
-    int getArgument(int index, int t){
-        return ofToInt(args[index]);
-    }
-    
-    float getArgument(int index, float t){
-        return ofToFloat(args[index]);
-    }
-    
-    bool getArgument(int index, bool t){
-        return ofToBool(args[index]);
-    }
-    
-    int getNumArguments(){
-        return args.size();
-    }
-    
-    string getCommandAsString(){
-        ostringstream os;
-        os << command << "(";
-        for(int i = 0; i < args.size(); i++){
-            os << args[i] << string(i < args.size() - 1 ? "," : "");
-        }
-        os << ")";
-        return os.str();
-    }
-    
-private:
-    
-    int instanceID;
-    string command;
-    vector<string> args;
-    
-};
-
-static ofxThreadedVideoCommand ofxThreadedVideoNullCommand;
-
-class ofxThreadedVideoEvent{
-
-public:
-
-    ofxThreadedVideoEvent(string _path, ofxThreadedVideoEventType _eventType, ofxThreadedVideo * _video)
-    : path(_path), eventType(_eventType), video(_video){eventTypeAsString = _video->getEventTypeAsString(_eventType);};
-
-    string path;
-    string eventTypeAsString;
-    ofxThreadedVideoEventType eventType;
-    ofxThreadedVideo * video;
-
-    friend ostream& operator<< (ostream &os, ofxThreadedVideoEvent &e);
-    
-};
-
-inline ostream& operator<<(ostream& os, const ofxThreadedVideoEvent &e){
-    os << e.eventTypeAsString << " " << e.path;
-    return os;
-};
 
 #endif
