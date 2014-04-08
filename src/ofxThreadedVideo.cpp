@@ -306,7 +306,7 @@ void ofxThreadedVideo::threadedFunction(){
                 if(c.getCommand() == "setLoopState"){
                     if(bVerbose) ofLogVerbose() << instanceID << " = " << c.getCommandAsString();
                     lock();
-                    loopState = (ofLoopType)c.getArgument<int>(0);
+                    loopState = (ofLoopType)c.getArgument(0, (int)0);
                     unlock();
                     video[videoID].setLoopState(loopState);
                     bPopCommand = true;
